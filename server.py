@@ -1,4 +1,4 @@
-"""WiFi Gamepad Server untuk Windows menggunakan WebSocket dan ViGEmBus."""
+"""VControllers Server untuk Windows menggunakan WebSocket dan ViGEmBus."""
 
 from __future__ import annotations
 
@@ -16,18 +16,18 @@ from websockets.exceptions import ConnectionClosed
 try:
     import vgamepad
 except ImportError as exc:
-    print("[ERROR] Library 'vgamepad' belum terinstall.")
-    print("        Jalankan: pip install -r requirements.txt")
-    print(f"        Detail  : {exc}")
+    print("[ERROR] Library 'vgamepad' is not installed.")
+    print("        Run   : pip install -r requirements.txt")
+    print(f"        Detail: {exc}")
     sys.exit(1)
 except Exception as exc:
-    print("[ERROR] Gagal memuat library 'vgamepad' atau driver ViGEmBus.")
-    print("        Pastikan ViGEmBus sudah terinstall di Windows:")
+    print("[ERROR] Failed to load 'vgamepad' library or ViGEmBus driver.")
+    print("        Make sure ViGEmBus is installed on Windows:")
     print("        https://github.com/nefarius/ViGEmBus/releases")
-    print(f"        Detail  : {exc}")
+    print(f"        Detail: {exc}")
     sys.exit(1)
 
-SERVER_NAME = "WiFi Gamepad Server"
+SERVER_NAME = "VControllers"
 HOST = "0.0.0.0"
 PORT = 8765
 
@@ -117,8 +117,8 @@ def init_gamepad() -> vgamepad.VX360Gamepad:
         return vgamepad.VX360Gamepad()
     except Exception as exc:
         raise RuntimeError(
-            "Gagal membuat virtual Xbox 360 controller. "
-            "Pastikan driver ViGEmBus sudah terinstall di Windows "
+            "Failed to create virtual Xbox 360 controller. "
+            "Make sure the ViGEmBus driver is installed on Windows "
             "(https://github.com/nefarius/ViGEmBus/releases)."
         ) from exc
 
@@ -182,10 +182,10 @@ async def handle_client(websocket: Any) -> None:
         reset_gamepad()
         log(
             f"Client connected: {client_addr} "
-            f"(mengambil alih kontrol aktif; total client: {len(connected_clients)})"
+            f"(took over active control; total clients: {len(connected_clients)})"
         )
     else:
-        log(f"Client connected: {client_addr} (total client: {len(connected_clients)})")
+        log(f"Client connected: {client_addr} (total clients: {len(connected_clients)})")
 
     try:
         async for message in websocket:
@@ -195,7 +195,7 @@ async def handle_client(websocket: Any) -> None:
             try:
                 payload = json.loads(message)
             except json.JSONDecodeError:
-                log(f"Pesan JSON tidak valid dari {client_addr}, diabaikan.")
+                log(f"Invalid JSON message from {client_addr}, ignored.")
                 continue
 
             if not isinstance(payload, dict):
@@ -210,7 +210,7 @@ async def handle_client(websocket: Any) -> None:
         reason = f"code={exc.code}" if exc.code is not None else "closed"
         log(f"Client disconnected: {client_addr} ({reason})")
     except Exception as exc:
-        log(f"Error pada koneksi {client_addr}: {exc}")
+        log(f"Connection error ({client_addr}): {exc}")
     finally:
         connected_clients.discard(websocket)
         was_active = websocket is active_client
@@ -221,20 +221,20 @@ async def handle_client(websocket: Any) -> None:
             if active_client is not None:
                 next_addr = format_client_addr(active_client)
                 log(
-                    f"Input direset ke netral. Kontrol aktif dialihkan ke {next_addr} "
-                    f"(sisa client: {len(connected_clients)})"
+                    f"Inputs reset to neutral. Active control transferred to {next_addr} "
+                    f"(remaining clients: {len(connected_clients)})"
                 )
             else:
-                log("Input direset ke netral. Tidak ada client terhubung.")
+                log("Inputs reset to neutral. No clients connected.")
         else:
             log(
-                f"Client non-aktif terputus: {client_addr} "
-                f"(sisa client: {len(connected_clients)})"
+                f"Inactive client disconnected: {client_addr} "
+                f"(remaining clients: {len(connected_clients)})"
             )
 
 
 async def main() -> None:
-    """Menginisialisasi virtual controller dan menjalankan server WebSocket."""
+    """Initializes the virtual controller and starts the WebSocket server."""
     global gamepad
 
     gamepad = init_gamepad()
@@ -246,15 +246,15 @@ async def main() -> None:
     print("=" * 56)
     print(f"  {SERVER_NAME}")
     print("=" * 56)
-    print("  Virtual Xbox 360 Controller : Aktif (ViGEmBus)")
+    print("  Virtual Xbox 360 Controller : Active (ViGEmBus)")
     print(f"  Listening                   : {HOST}:{PORT}")
-    print(f"  IP Lokal (masukkan di HP)   : {primary_ip}")
+    print(f"  Local IP (enter on phone)   : {primary_ip}")
     print(f"  WebSocket URL               : ws://{primary_ip}:{PORT}")
     if len(local_ips) > 1:
         extra_ips = ", ".join(local_ips[1:])
-        print(f"  IP Alternatif               : {extra_ips}")
+        print(f"  Alternative IPs             : {extra_ips}")
     print("-" * 56)
-    print("  Tekan Ctrl+C untuk menghentikan server.")
+    print("  Press Ctrl+C to stop the server.")
     print("=" * 56, flush=True)
 
     try:
@@ -275,20 +275,20 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print()
-        log("Server dihentikan oleh pengguna.")
+        log("Server stopped by user.")
     except RuntimeError as exc:
         print(f"\n[ERROR] {exc}", file=sys.stderr)
         sys.exit(1)
     except OSError as exc:
         print(
-            f"\n[ERROR] Gagal menjalankan server pada port {PORT}: {exc}",
+            f"\n[ERROR] Failed to start server on port {PORT}: {exc}",
             file=sys.stderr,
         )
         print(
-            "        Pastikan port 8765 tidak sedang digunakan aplikasi lain.",
+            "        Make sure port 8765 is not already in use by another app.",
             file=sys.stderr,
         )
         sys.exit(1)
     except Exception as exc:
-        print(f"\n[ERROR] Terjadi kesalahan tak terduga: {exc}", file=sys.stderr)
+        print(f"\n[ERROR] Unexpected error: {exc}", file=sys.stderr)
         sys.exit(1)
