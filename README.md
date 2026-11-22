@@ -6,8 +6,8 @@ Windows desktop application (CustomTkinter) that receives gamepad input from the
 
 No Python installation required — download the standalone Windows executable directly from the releases page:
 
-- **[Download VControllers.exe (Latest Release)](https://github.com/<username>/<repo-name>/releases/latest/download/VControllers.exe)**
-- **[View All Releases](https://github.com/<username>/<repo-name>/releases/latest)**
+- **[Download VControllers.exe (Latest Release)](https://github.com/msuryasyahruli/Virtual-Controller-Server/releases/latest/download/VControllers.exe)**
+- **[View All Releases](https://github.com/msuryasyahruli/Virtual-Controller-Server/releases/latest)**
 
 > **Note:** The **ViGEmBus** driver must still be installed on Windows before running `VControllers.exe`.
 
