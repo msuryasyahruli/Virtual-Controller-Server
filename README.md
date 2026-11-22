@@ -69,3 +69,7 @@ Windows Firewall may block incoming connections from your Android device. Make s
    ```
 
 The compiled executable will be generated at `dist/VControllers.exe`.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
