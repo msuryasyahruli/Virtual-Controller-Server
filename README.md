@@ -1,5 +1,7 @@
 # VControllers
 
+<img width="300" alt="image" src="./assets/image.png" />
+
 Windows desktop application (CustomTkinter) that receives gamepad input from the Android app over WebSocket and forwards it to a virtual Xbox 360 controller using the **ViGEmBus** driver.
 
 ## Download Application (`.exe`)
@@ -8,6 +10,7 @@ No Python installation required — download the standalone Windows executable d
 
 - **[Download VControllers.exe (Latest Release)](https://github.com/msuryasyahruli/Virtual-Controller-Server/releases/latest/download/VControllers.exe)**
 - **[View All Releases](https://github.com/msuryasyahruli/Virtual-Controller-Server/releases/latest)**
+- **[Android Client App (Mobile-Virtual-Controller)](https://github.com/msuryasyahruli/Mobile-Virtual-Controller.git)**
 
 > **Note:** The **ViGEmBus** driver must still be installed on Windows before running `VControllers.exe`.
 
@@ -15,7 +18,7 @@ No Python installation required — download the standalone Windows executable d
 
 - Windows 10 / 11
 - **ViGEmBus** driver — https://github.com/nefarius/ViGEmBus/releases
-- Python 3.8 or newer *(only required when running from source)*
+- Python 3.8 or newer _(only required when running from source)_
 - Windows PC and Android device connected to the same WiFi network
 
 ## Project Structure
@@ -34,17 +37,19 @@ No Python installation required — download the standalone Windows executable d
 
 2. **Install Python dependencies**  
    Open Command Prompt or PowerShell in the `python-server` folder and run:
+
    ```bash
    python -m pip install -r requirements.txt
    ```
 
 3. **Launch the desktop app**
+
    ```bash
    python server_app.py
    ```
 
 4. **Start the server & connect from Android**  
-   Click **Start Server**, then enter the displayed Windows local IP address into the **VControllers** Android app (default port `8765`).
+   Click **Start Server**, then enter the displayed Windows local IP address into the **[VControllers Android app](https://github.com/msuryasyahruli/Mobile-Virtual-Controller.git)** (default port `8765`).
 
 ## Windows Firewall Note
 
@@ -59,6 +64,7 @@ Windows Firewall may block incoming connections from your Android device. Make s
 ## Building `.exe`
 
 1. Install PyInstaller:
+
    ```bash
    python -m pip install pyinstaller
    ```
