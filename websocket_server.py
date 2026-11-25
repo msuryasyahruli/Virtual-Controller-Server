@@ -144,7 +144,7 @@ class WebSocketServer:
                     )
                     continue
 
-                if isinstance(data, dict) and data.get("type") == "gamepad":
+                if isinstance(data, dict) and isinstance(data.get("type"), str):
                     if self.on_input is not None:
                         self.on_input(data)
         except ConnectionClosed:

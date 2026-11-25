@@ -1,8 +1,8 @@
-# VControllers
+# VControllers (v1.1.0)
 
 <img width="300" alt="image" src="./assets/image.png" />
 
-Windows desktop application (CustomTkinter) that receives gamepad input from the Android app over WebSocket and forwards it to a virtual Xbox 360 controller using the **ViGEmBus** driver.
+Windows & macOS 15+ desktop application (CustomTkinter) that receives gamepad, trackpad/mouse, keyboard, and custom button inputs from the Android app over WebSocket.
 
 ## Download Application (`.exe`)
 
@@ -16,40 +16,50 @@ No Python installation required — download the standalone Windows executable d
 
 ## Requirements
 
-- Windows 10 / 11
-- **ViGEmBus** driver — https://github.com/nefarius/ViGEmBus/releases
+- **Windows 10 / 11** with **ViGEmBus** driver (https://github.com/nefarius/ViGEmBus/releases)
+- **OR macOS 15.0 (Sequoia) or newer** *(uses built-in macOS Keyboard Bridge via CoreGraphics)*
 - Python 3.8 or newer _(only required when running from source)_
-- Windows PC and Android device connected to the same WiFi network
+- Host computer and Android device connected to the same WiFi network
 
 ## Project Structure
 
 - `server_app.py` — Main desktop GUI application (entry point)
-- `gamepad_controller.py` — Virtual Xbox 360 controller (`vgamepad` / ViGEmBus)
+- `gamepad_controller.py` — Platform controller backend (Windows ViGEmBus Xbox 360 / macOS 15+ Keyboard Bridge)
 - `websocket_server.py` — Async WebSocket server (`asyncio`, single active client)
 - `requirements.txt` — Python dependencies
 
 ## Installation & Running (from Source)
 
-1. **Download & install ViGEmBus**  
-   Download the latest installer from:  
-   https://github.com/nefarius/ViGEmBus/releases  
-   Run the `.exe` installer until finished (restart your PC if prompted).
+1. **Driver / Platform Setup**
+   - **Windows:** Download and install the latest **ViGEmBus** `.exe` from https://github.com/nefarius/ViGEmBus/releases (restart if prompted).
+   - **macOS 15+:** No extra driver needed. Ensure your Mac is running **macOS 15.0+**, and grant **Accessibility** permission to Terminal / Python / VControllers in **System Settings → Privacy & Security → Accessibility** so simulated keystrokes work.
 
 2. **Install Python dependencies**  
-   Open Command Prompt or PowerShell in the `python-server` folder and run:
+   Open a terminal in the `python-server` folder and run:
 
    ```bash
-   python -m pip install -r requirements.txt
+   python3 -m pip install -r requirements.txt
    ```
 
 3. **Launch the desktop app**
 
    ```bash
-   python server_app.py
+   python3 server_app.py
    ```
 
 4. **Start the server & connect from Android**  
-   Click **Start Server**, then enter the displayed Windows local IP address into the **[VControllers Android app](https://github.com/msuryasyahruli/Mobile-Virtual-Controller.git)** (default port `8765`).
+   Click **Start Server**, then enter the displayed local IP address into the **[VControllers Android app](https://github.com/msuryasyahruli/Mobile-Virtual-Controller.git)** (default port `8765`).
+
+## macOS 15+ Keyboard Mapping
+
+Because macOS 15 (Sequoia) restricts userspace virtual HID gamepads without Apple DriverKit entitlements, macOS maps controller inputs to keyboard keys via `CoreGraphics`:
+
+| Gamepad Input | macOS Key | Gamepad Input | macOS Key |
+| --- | --- | --- | --- |
+| `A` / `B` / `X` / `Y` | `Space` / `Esc` / `R` / `F` | `Left Stick` | `W` `A` `S` `D` |
+| `LB` / `RB` | `Q` / `E` | `D-Pad` | `Arrow Keys` |
+| `LT` / `RT` | `Z` / `X` | `START` / `SELECT` | `Return` / `Tab` |
+| `L3` / `R3` | `Left Shift` / `V` | | |
 
 ## Windows Firewall Note
 

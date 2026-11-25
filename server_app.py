@@ -1,9 +1,10 @@
-"""Aplikasi GUI desktop Windows untuk VControllers dengan tema Light Retro OS."""
+"""Cross-platform desktop GUI (Windows & macOS 15+) for VControllers."""
 
 from __future__ import annotations
 
 import asyncio
 import socket
+import sys
 import threading
 import tkinter as tk
 from datetime import datetime
@@ -12,8 +13,16 @@ from typing import Any, Callable, Dict, Optional
 
 import customtkinter as ctk
 
-from gamepad_controller import GamepadController, ViGEmBusError
+from gamepad_controller import GamepadBackendError, GamepadController
+from pc_input_controller import PcInputController
 from websocket_server import WebSocketServer
+
+APP_VERSION = "1.1.0"
+IS_MACOS = sys.platform == "darwin"
+FONT_UI = "Helvetica Neue" if IS_MACOS else "Tahoma"
+FONT_MONO = "Menlo" if IS_MACOS else "Consolas"
+FONT_SYMBOL = "Apple Symbols" if IS_MACOS else "Segoe UI"
+PROTOCOL_TAG = "MAC15" if IS_MACOS else "XUSB"
 
 # Tema warna Light Retro OS (klasik Windows 98/2000)
 COLOR_BG = "#d4d0c8"
@@ -97,7 +106,7 @@ class GamepadServerApp:
         ctk.set_default_color_theme("blue")
 
         self.app: ctk.CTk = ctk.CTk()
-        self.app.title("VControllers")
+        self.app.title(f"VControllers v{APP_VERSION}")
         self.app.geometry("400x520")
         self.app.resizable(False, False)
         self.app.configure(fg_color=COLOR_BG)
@@ -114,12 +123,15 @@ class GamepadServerApp:
         self._server: Optional[WebSocketServer] = None
         self._server_thread: Optional[threading.Thread] = None
 
+        self._pc_input: PcInputController = PcInputController()
         self._controller: Optional[GamepadController] = None
-        self._vigem_error: Optional[str] = None
+        self._backend_error: Optional[str] = None
         try:
-            self._controller = GamepadController()
-        except ViGEmBusError as exc:
-            self._vigem_error = str(exc)
+            self._controller = GamepadController(
+                pc_action_callback=self._pc_input.apply_message
+            )
+        except GamepadBackendError as exc:
+            self._backend_error = str(exc)
 
         # Referensi widget (diinisialisasi di build_ui)
         self._header_port_badge: Optional[ctk.CTkLabel] = None
@@ -138,27 +150,38 @@ class GamepadServerApp:
         self.build_ui()
         self.app.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        if self._vigem_error is not None:
-            self._set_status(COLOR_STATUS_ERROR, "ViGEmBus not found")
-            self._set_gamepad_indicator(COLOR_STATUS_ERROR, "Not found")
+        if self._backend_error is not None:
+            status_err = (
+                "Incompatible macOS" if IS_MACOS else "ViGEmBus not found"
+            )
+            dialog_title = (
+                "macOS Version Error" if IS_MACOS else "ViGEmBus Not Found"
+            )
+            self._set_status(COLOR_STATUS_ERROR, status_err)
+            self._set_gamepad_indicator(COLOR_STATUS_ERROR, "Unavailable")
             self._set_start_enabled(False)
             self._set_stop_enabled(False)
-            self.log("ERROR: ViGEmBus driver not found.")
-            error_message = self._vigem_error
+            self.log(f"ERROR: {self._backend_error}")
+            error_message = self._backend_error
             self.app.after(
                 150,
-                lambda: messagebox.showerror(
-                    "ViGEmBus Not Found",
-                    f"{error_message}\n\n"
-                    "Please install the ViGEmBus driver and restart this application.",
-                ),
+                lambda: messagebox.showerror(dialog_title, error_message),
             )
         else:
+            backend_name = (
+                self._controller.backend_name
+                if self._controller is not None
+                else "Active"
+            )
             self._set_status(COLOR_STATUS_WAITING, "Ready to start")
-            self._set_gamepad_indicator(COLOR_STATUS_CONNECTED, "Active")
+            self._set_gamepad_indicator(COLOR_STATUS_CONNECTED, backend_name)
             self._set_start_enabled(True)
             self._set_stop_enabled(False)
-            self.log(f"Ready. Local IP detected: {self._local_ip}")
+            self.log(f"Ready ({backend_name}). Local IP: {self._local_ip}")
+            if IS_MACOS:
+                self.log(
+                    "macOS 15+: Grant Accessibility permission if keystrokes are blocked."
+                )
 
     def _run_on_ui_thread(self, callback: Callable[[], None]) -> None:
         """Menjalankan update GUI secara aman di main thread melalui app.after(0, ...)."""
@@ -213,8 +236,8 @@ class GamepadServerApp:
 
         self._header_port_badge = ctk.CTkLabel(
             header,
-            text=f"XUSB // {DEFAULT_PORT}",
-            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
+            text=f"{PROTOCOL_TAG} // {DEFAULT_PORT}",
+            font=ctk.CTkFont(family=FONT_MONO, size=10, weight="bold"),
             text_color=COLOR_TITLEBAR_SUB,
             fg_color=COLOR_TITLEBAR_BG,
             bg_color=COLOR_TITLEBAR_BG,
@@ -546,7 +569,7 @@ class GamepadServerApp:
             bg_color=COLOR_INSET_BG,
             border_width=0,
             text_color=COLOR_TEXT_PRIMARY,
-            font=ctk.CTkFont(family="Consolas", size=10),
+            font=ctk.CTkFont(family=FONT_MONO, size=10),
             scrollbar_button_color=COLOR_SCROLLBAR,
             scrollbar_button_hover_color=COLOR_SCROLLBAR_HOVER,
             wrap="word",
@@ -638,7 +661,7 @@ class GamepadServerApp:
     def start_server(self) -> None:
         """Starts the asyncio WebSocket server in a separate background thread."""
         if self._controller is None:
-            self.log("Cannot start server: ViGEmBus is not installed.")
+            self.log("Cannot start server: Controller backend is not available.")
             return
 
         if self._is_running:
@@ -657,7 +680,7 @@ class GamepadServerApp:
         self._last_input_summary = "-"
 
         if self._header_port_badge is not None:
-            self._header_port_badge.configure(text=f"XUSB // {port}")
+            self._header_port_badge.configure(text=f"{PROTOCOL_TAG} // {port}")
 
         self._set_start_enabled(False)
         self._set_stop_enabled(True)
@@ -692,6 +715,7 @@ class GamepadServerApp:
         finally:
             if self._controller is not None:
                 self._controller.reset()
+            self._pc_input.reset()
             self._run_on_ui_thread(lambda: self._on_server_stopped(server))
 
     def _on_server_error(self, message: str) -> None:
@@ -735,6 +759,7 @@ class GamepadServerApp:
 
         if self._controller is not None:
             self._controller.reset()
+        self._pc_input.reset()
 
         self.log("Server stopped.")
 
@@ -749,9 +774,10 @@ class GamepadServerApp:
         self._run_on_ui_thread(_update)
 
     def on_client_disconnect(self) -> None:
-        """Callback when the client disconnects; always resets gamepad inputs."""
+        """Callback when the client disconnects; always resets gamepad and PC inputs."""
         if self._controller is not None:
             self._controller.reset()
+        self._pc_input.reset()
 
         def _update() -> None:
             self._client_connected = False
@@ -765,12 +791,24 @@ class GamepadServerApp:
         self._run_on_ui_thread(_update)
 
     def on_input_received(self, input_data: Dict[str, Any]) -> None:
-        """Forwards input to GamepadController and updates the last-input label."""
-        if self._controller is None:
-            return
+        """Dispatches gamepad or PC mouse/keyboard inputs and updates Last Input."""
+        msg_type = input_data.get("type")
+        summary: Optional[str] = None
 
-        self._controller.apply_input(input_data)
-        summary = self._controller.get_active_inputs(input_data)
+        if msg_type == "gamepad":
+            if self._controller is not None:
+                self._controller.apply_input(input_data)
+                summary = self._controller.get_active_inputs(input_data)
+        elif msg_type == "custom_button":
+            btn_id = str(input_data.get("id", input_data.get("button", ""))).strip()
+            pressed = bool(input_data.get("pressed", False))
+            if btn_id and self._controller is not None:
+                summary = self._controller.apply_custom_button(btn_id, pressed)
+        else:
+            summary = self._pc_input.apply_message(input_data)
+
+        if summary is None:
+            return
 
         should_log_first = not self._input_logged_for_session
         should_update_label = summary != self._last_input_summary
@@ -844,6 +882,7 @@ class GamepadServerApp:
             self._server.stop()
         if self._controller is not None:
             self._controller.reset()
+        self._pc_input.reset()
         self.app.destroy()
 
     def run(self) -> None:

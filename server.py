@@ -1,77 +1,39 @@
-"""VControllers Server untuk Windows menggunakan WebSocket dan ViGEmBus."""
+"""VControllers CLI Server for Windows & macOS 15+ over WebSocket."""
 
 from __future__ import annotations
 
 import asyncio
 import json
-import math
 import socket
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-try:
-    import vgamepad
-except ImportError as exc:
-    print("[ERROR] Library 'vgamepad' is not installed.")
-    print("        Run   : pip install -r requirements.txt")
-    print(f"        Detail: {exc}")
-    sys.exit(1)
-except Exception as exc:
-    print("[ERROR] Failed to load 'vgamepad' library or ViGEmBus driver.")
-    print("        Make sure ViGEmBus is installed on Windows:")
-    print("        https://github.com/nefarius/ViGEmBus/releases")
-    print(f"        Detail: {exc}")
-    sys.exit(1)
+from gamepad_controller import GamepadBackendError, GamepadController
+from pc_input_controller import PcInputController
 
 SERVER_NAME = "VControllers"
+APP_VERSION = "1.1.0"
 HOST = "0.0.0.0"
 PORT = 8765
 
-BUTTON_MAP: Dict[str, Any] = {
-    "A": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_A,
-    "B": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_B,
-    "X": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_X,
-    "Y": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_Y,
-    "LB": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_SHOULDER,
-    "RB": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_SHOULDER,
-    "START": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_START,
-    "SELECT": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_BACK,
-    "L3": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB,
-    "R3": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB,
-    "DPAD_UP": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_UP,
-    "DPAD_DOWN": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN,
-    "DPAD_LEFT": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_LEFT,
-    "DPAD_RIGHT": vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_RIGHT,
-}
-
-gamepad: Optional[vgamepad.VX360Gamepad] = None
+controller: Optional[GamepadController] = None
+pc_input: PcInputController = PcInputController()
 connected_clients: Set[Any] = set()
 active_client: Optional[Any] = None
 
 
 def log(message: str) -> None:
-    """Menampilkan log singkat dengan timestamp."""
+    """Prints a timestamped log line."""
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{timestamp}] {message}", flush=True)
 
 
-def clamp_float(value: Any, min_val: float, max_val: float, default: float = 0.0) -> float:
-    """Mengonversi nilai ke float yang aman dalam rentang [min_val, max_val]."""
-    try:
-        num = float(value)
-    except (TypeError, ValueError):
-        return default
-    if not math.isfinite(num):
-        return default
-    return max(min_val, min(max_val, num))
-
-
 def get_local_ip() -> str:
-    """Mendapatkan alamat IP lokal utama mesin Windows."""
+    """Returns the primary local IPv4 address."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.connect(("8.8.8.8", 80))
@@ -85,10 +47,10 @@ def get_local_ip() -> str:
         sock.close()
 
 
-def get_all_local_ips() -> List[str]:
-    """Mendapatkan daftar alamat IPv4 lokal non-loopback yang tersedia."""
+def get_all_local_ips() -> list[str]:
+    """Returns a list of available non-loopback local IPv4 addresses."""
     primary = get_local_ip()
-    ips: List[str] = []
+    ips: list[str] = []
     if primary and not primary.startswith("127."):
         ips.append(primary)
 
@@ -104,69 +66,33 @@ def get_all_local_ips() -> List[str]:
 
 
 def format_client_addr(websocket: Any) -> str:
-    """Memformat alamat IP:port client WebSocket untuk log."""
+    """Formats client IP:port for logs."""
     remote = getattr(websocket, "remote_address", None)
     if isinstance(remote, tuple) and len(remote) >= 2:
         return f"{remote[0]}:{remote[1]}"
     return str(remote) if remote else "unknown"
 
 
-def init_gamepad() -> vgamepad.VX360Gamepad:
-    """Menginisialisasi virtual Xbox 360 controller melalui ViGEmBus sekali saat startup."""
-    try:
-        return vgamepad.VX360Gamepad()
-    except Exception as exc:
-        raise RuntimeError(
-            "Failed to create virtual Xbox 360 controller. "
-            "Make sure the ViGEmBus driver is installed on Windows "
-            "(https://github.com/nefarius/ViGEmBus/releases)."
-        ) from exc
-
-
 def reset_gamepad() -> None:
-    """Mereset semua tombol dan axis virtual gamepad ke posisi netral."""
-    if gamepad is None:
-        return
-
-    for xusb_button in BUTTON_MAP.values():
-        gamepad.release_button(button=xusb_button)
-
-    gamepad.left_joystick_float(x_value_float=0.0, y_value_float=0.0)
-    gamepad.right_joystick_float(x_value_float=0.0, y_value_float=0.0)
-    gamepad.left_trigger_float(value_float=0.0)
-    gamepad.right_trigger_float(value_float=0.0)
-    gamepad.update()
+    """Resets controller and PC inputs to neutral."""
+    if controller is not None:
+        controller.reset()
+    pc_input.reset()
 
 
 def apply_gamepad_state(data: Dict[str, Any]) -> None:
-    """Memetakan payload JSON dari aplikasi Android ke input vgamepad."""
-    if gamepad is None or data.get("type") != "gamepad":
-        return
-
-    buttons = data.get("buttons")
-    if isinstance(buttons, dict):
-        for name, xusb_button in BUTTON_MAP.items():
-            if name in buttons:
-                if bool(buttons[name]):
-                    gamepad.press_button(button=xusb_button)
-                else:
-                    gamepad.release_button(button=xusb_button)
-
-    axes = data.get("axes")
-    if isinstance(axes, dict):
-        lx = clamp_float(axes.get("LX", 0.0), -1.0, 1.0)
-        ly = clamp_float(axes.get("LY", 0.0), -1.0, 1.0)
-        rx = clamp_float(axes.get("RX", 0.0), -1.0, 1.0)
-        ry = clamp_float(axes.get("RY", 0.0), -1.0, 1.0)
-        lt = clamp_float(axes.get("LT", 0.0), 0.0, 1.0)
-        rt = clamp_float(axes.get("RT", 0.0), 0.0, 1.0)
-
-        gamepad.left_joystick_float(x_value_float=lx, y_value_float=ly)
-        gamepad.right_joystick_float(x_value_float=rx, y_value_float=ry)
-        gamepad.left_trigger_float(value_float=lt)
-        gamepad.right_trigger_float(value_float=rt)
-
-    gamepad.update()
+    """Applies JSON gamepad, custom_button, or PC mouse/keyboard payload."""
+    msg_type = data.get("type")
+    if msg_type == "gamepad":
+        if controller is not None:
+            controller.apply_input(data)
+    elif msg_type == "custom_button":
+        btn_id = str(data.get("id", data.get("button", ""))).strip()
+        pressed = bool(data.get("pressed", False))
+        if btn_id and controller is not None:
+            controller.apply_custom_button(btn_id, pressed)
+    else:
+        pc_input.apply_message(data)
 
 
 async def handle_client(websocket: Any) -> None:
@@ -234,19 +160,23 @@ async def handle_client(websocket: Any) -> None:
 
 
 async def main() -> None:
-    """Initializes the virtual controller and starts the WebSocket server."""
-    global gamepad
+    """Initializes the controller backend and starts the WebSocket server."""
+    global controller
 
-    gamepad = init_gamepad()
+    try:
+        controller = GamepadController(pc_action_callback=pc_input.apply_message)
+    except GamepadBackendError as exc:
+        raise RuntimeError(str(exc)) from exc
+
     reset_gamepad()
 
     local_ips = get_all_local_ips()
     primary_ip = local_ips[0]
 
     print("=" * 56)
-    print(f"  {SERVER_NAME}")
+    print(f"  {SERVER_NAME} v{APP_VERSION}")
     print("=" * 56)
-    print("  Virtual Xbox 360 Controller : Active (ViGEmBus)")
+    print(f"  Controller Backend          : {controller.backend_name}")
     print(f"  Listening                   : {HOST}:{PORT}")
     print(f"  Local IP (enter on phone)   : {primary_ip}")
     print(f"  WebSocket URL               : ws://{primary_ip}:{PORT}")

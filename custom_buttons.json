@@ -1,0 +1,18 @@
+{
+  "GUIDE": "xusb:GUIDE",
+  "TOUCHPAD": "xusb:SELECT",
+  "SHARE": "key:F12",
+  "CAPTURE": "shortcut:META+ALT+G",
+  "M1": "xusb:A",
+  "M2": "xusb:B",
+  "M3": "xusb:X",
+  "M4": "xusb:Y",
+  "CUSTOM_1": "key:F13",
+  "CUSTOM_2": "key:F14",
+  "CUSTOM_3": "key:F15",
+  "CUSTOM_4": "key:F16",
+  "CUSTOM_5": "key:F17",
+  "CUSTOM_6": "key:F18",
+  "CUSTOM_7": "key:F19",
+  "CUSTOM_8": "key:F20"
+}
