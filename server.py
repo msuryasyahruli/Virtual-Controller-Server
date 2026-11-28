@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional, Set
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from bluetooth_server import BluetoothServer
 from gamepad_controller import GamepadBackendError, GamepadController
 from pc_input_controller import PcInputController
 
@@ -187,6 +188,16 @@ async def main() -> None:
     print("  Press Ctrl+C to stop the server.")
     print("=" * 56, flush=True)
 
+    bt_server = BluetoothServer(
+        on_connect=lambda addr: log(f"Bluetooth client connected: {addr}"),
+        on_disconnect=lambda: (reset_gamepad(), log("Bluetooth client disconnected.")),
+        on_input=apply_gamepad_state,
+        on_log=log,
+        on_error=lambda err: log(f"Bluetooth error: {err}"),
+        is_busy_fn=lambda: active_client is not None,
+    )
+    bt_server.start_background()
+
     try:
         async with websockets.serve(
             handle_client,
@@ -197,6 +208,7 @@ async def main() -> None:
         ):
             await asyncio.Future()
     finally:
+        bt_server.stop()
         reset_gamepad()
 
 

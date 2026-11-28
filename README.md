@@ -48,7 +48,9 @@ No Python installation required — download the standalone Windows executable d
    ```
 
 4. **Start the server & connect from Android**  
-   Click **Start Server**, then enter the displayed local IP address into the **[VControllers Android app](https://github.com/msuryasyahruli/Mobile-Virtual-Controller.git)** (default port `8765`).
+   Click **Start Server**, then connect from the **[VControllers Android app](https://github.com/msuryasyahruli/Mobile-Virtual-Controller.git)** via:
+   - **WiFi:** Enter the displayed local IP address and port (default `8765`).
+   - **Bluetooth:** Pair your Android phone with your Windows PC or Mac in system Bluetooth settings, then switch to the **Bluetooth** tab in the Android app and select your paired computer. *(On macOS, allow Bluetooth access under **System Settings → Privacy & Security → Bluetooth**.)*
 
 ## macOS 15+ Keyboard Mapping
 

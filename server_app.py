@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Optional
 
 import customtkinter as ctk
 
+from bluetooth_server import BluetoothServer
 from gamepad_controller import GamepadBackendError, GamepadController
 from pc_input_controller import PcInputController
 from websocket_server import WebSocketServer
@@ -121,6 +122,7 @@ class GamepadServerApp:
 
         self._local_ip: str = detect_local_ip()
         self._server: Optional[WebSocketServer] = None
+        self._bt_server: Optional[BluetoothServer] = None
         self._server_thread: Optional[threading.Thread] = None
 
         self._pc_input: PcInputController = PcInputController()
@@ -706,6 +708,17 @@ class GamepadServerApp:
         )
         self._server_thread.start()
 
+        bt_server = BluetoothServer(
+            on_connect=self.on_client_connect,
+            on_disconnect=self.on_client_disconnect,
+            on_input=self.on_input_received,
+            on_log=self.log,
+            on_error=self._on_bt_error,
+            is_busy_fn=lambda: self._client_connected,
+        )
+        self._bt_server = bt_server
+        bt_server.start_background()
+
     def _run_server_loop(self, server: WebSocketServer) -> None:
         """Background thread target running asyncio.run(server.start())."""
         try:
@@ -717,6 +730,10 @@ class GamepadServerApp:
                 self._controller.reset()
             self._pc_input.reset()
             self._run_on_ui_thread(lambda: self._on_server_stopped(server))
+
+    def _on_bt_error(self, message: str) -> None:
+        """Logs non-fatal Bluetooth SPP errors without stopping the WiFi server."""
+        self.log(f"Bluetooth: {message}")
 
     def _on_server_error(self, message: str) -> None:
         """Handles fatal server errors such as port already in use."""
@@ -735,6 +752,9 @@ class GamepadServerApp:
         was_error = self._had_server_error
 
         self._server = None
+        if self._bt_server is not None:
+            self._bt_server.stop()
+            self._bt_server = None
         self._server_thread = None
         self._is_running = False
         self._client_connected = False
@@ -756,6 +776,9 @@ class GamepadServerApp:
         self._set_stop_enabled(False)
         if self._server is not None:
             self._server.stop()
+        if self._bt_server is not None:
+            self._bt_server.stop()
+            self._bt_server = None
 
         if self._controller is not None:
             self._controller.reset()
@@ -764,9 +787,10 @@ class GamepadServerApp:
         self.log("Server stopped.")
 
     def on_client_connect(self, ip: str) -> None:
-        """Callback when an Android device connects to the WebSocket server."""
+        """Callback when an Android device connects to the WebSocket or Bluetooth server."""
+        self._client_connected = True
+
         def _update() -> None:
-            self._client_connected = True
             self._input_logged_for_session = False
             self._set_status(COLOR_STATUS_CONNECTED, f"Connected ({ip})")
             self.log(f"Client connected ({ip})")
@@ -775,12 +799,12 @@ class GamepadServerApp:
 
     def on_client_disconnect(self) -> None:
         """Callback when the client disconnects; always resets gamepad and PC inputs."""
+        self._client_connected = False
         if self._controller is not None:
             self._controller.reset()
         self._pc_input.reset()
 
         def _update() -> None:
-            self._client_connected = False
             self._input_logged_for_session = False
             self._last_input_summary = "-"
             self._set_last_input_text("-")
@@ -880,6 +904,8 @@ class GamepadServerApp:
         self._is_closing = True
         if self._server is not None:
             self._server.stop()
+        if self._bt_server is not None:
+            self._bt_server.stop()
         if self._controller is not None:
             self._controller.reset()
         self._pc_input.reset()

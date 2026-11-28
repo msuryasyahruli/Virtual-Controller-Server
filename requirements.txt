@@ -1,3 +1,4 @@
 websockets>=11.0
 customtkinter>=5.2.0
 vgamepad>=0.1.0; sys_platform == "win32" or sys_platform == "linux"
+pyobjc-framework-IOBluetooth>=10.0; sys_platform == "darwin"
